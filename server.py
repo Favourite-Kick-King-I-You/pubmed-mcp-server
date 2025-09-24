@@ -68,9 +68,11 @@ async def health(_):
 async def root(_):
     return JSONResponse({"service": "pubmed-mcp-server", "status": "ok"})
 
-app = Starlette(routes=[
-    Route("/", root),
-    Route("/healthz", health),
-    Mount("/mcp/", app=mcp_app),  # ← ChatGPTのコネクタはここに接続します
-    Mount("/sse/", app=mcp_app),  
-])
+app = Starlette()
+# ルート/ヘルス
+app.add_route("/", root)
+app.add_route("/healthz", health)
+
+# ★ ここがポイント：直マウント（末尾スラッシュ無しのベースでもOK）
+app.mount("/mcp", mcp_app)   # /mcp と /mcp/ の両方を受ける
+app.mount("/sse", mcp_app)   # /sse と /sse/ でも受ける
