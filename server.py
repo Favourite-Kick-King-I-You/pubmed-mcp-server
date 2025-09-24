@@ -65,18 +65,14 @@ async def mcp_dispatch(scope, receive, send):
     # それ以外は 404
     return await PlainTextResponse("Not Found", 404)(scope, receive, send)
 
-# ヘルスとルート
-async def health(_):
-    return PlainTextResponse("ok", 200)
 
-async def root(_):
-    return JSONResponse({"service": "pubmed-mcp-server", "status": "ok"})
 
-app = Starlette()
-app.add_route("/", root)
-app.add_route("/healthz", health)
+from starlette.responses import PlainTextResponse
 
-# ★ これでOK：StarletteのMountを素直に使う
-# /mcp と /sse の両方を明示的にマウント
-app.mount("/mcp", mcp_http_app)
-app.mount("/sse", mcp_http_app)
+# 追加テスト用
+async def dummy_mcp(scope, receive, send):
+    response = PlainTextResponse("MCP dummy alive", 200)
+    await response(scope, receive, send)
+
+# ↓ テスト用に一時的に差し替え
+app.mount("/mcp", dummy_mcp)
