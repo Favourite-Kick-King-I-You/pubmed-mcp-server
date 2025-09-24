@@ -71,6 +71,6 @@ async def root(_):
 app = Starlette(routes=[
     Route("/", root),
     Route("/healthz", health),
-    Mount("/mcp", app=mcp_app),  # ← ChatGPTのコネクタはここに接続します
-    Mount("/sse", app=mcp_app),  
+    Mount("/mcp/", app=mcp_app),  # ← ChatGPTのコネクタはここに接続します
+    Mount("/sse/", app=mcp_app),  
 ])
