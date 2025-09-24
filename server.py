@@ -69,10 +69,11 @@ async def root(_):
     return JSONResponse({"service": "pubmed-mcp-server", "status": "ok"})
 
 app = Starlette()
-# ルート/ヘルス
 app.add_route("/", root)
 app.add_route("/healthz", health)
 
-# ★ ここがポイント：直マウント（末尾スラッシュ無しのベースでもOK）
-app.mount("/mcp", mcp_app)   # /mcp と /mcp/ の両方を受ける
-app.mount("/sse", mcp_app)   # /sse と /sse/ でも受ける
+# MCP アプリを両方にマウント
+app.mount("/mcp", mcp_app)   # /mcp 直
+app.mount("/mcp/", mcp_app)  # /mcp/ にも対応
+app.mount("/sse", mcp_app)
+app.mount("/sse/", mcp_app)
