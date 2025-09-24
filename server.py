@@ -1,11 +1,10 @@
-# server.py
 import os
 from typing import List, Dict, Any
 import httpx
 
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse
-from starlette.routing import Mount, Route
+from starlette.routing import Route
 
 # === MCP SDK ===
 from mcp.server.fastmcp import FastMCP
@@ -13,38 +12,26 @@ from mcp.server.fastmcp import FastMCP
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 NCBI_API_KEY = os.getenv("NCBI_API_KEY")
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "your_email@example.com")
-
 UA = {"User-Agent": f"pubmed-mcp/1.0 (+{CONTACT_EMAIL})"}
 
 mcp = FastMCP("PubMed MCP")
 
 @mcp.tool()
-def search_pubmed(q: str, n: int = 5) -> List[Dict[str, Any]]:
-    """
-    PubMed を検索して上位 n 件を返す。
-    Args:
-      q: クエリ
-      n: 1-50
-    """
+def search_pubmed(q: str, n: int = 5) -> list[dict[str, Any]]:
     n = max(1, min(50, int(n)))
     params = {"db": "pubmed", "term": q, "retmode": "json", "retmax": n}
     if NCBI_API_KEY:
         params["api_key"] = NCBI_API_KEY
-
     with httpx.Client(timeout=20, headers=UA) as client:
-        r = client.get(EUTILS + "esearch.fcgi", params=params)
-        r.raise_for_status()
+        r = client.get(EUTILS + "esearch.fcgi", params=params); r.raise_for_status()
         ids = r.json().get("esearchresult", {}).get("idlist", [])
         if not ids:
             return []
-
         sparams = {"db": "pubmed", "id": ",".join(ids), "retmode": "json"}
         if NCBI_API_KEY:
             sparams["api_key"] = NCBI_API_KEY
-        s = client.get(EUTILS + "esummary.fcgi", params=sparams)
-        s.raise_for_status()
+        s = client.get(EUTILS + "esummary.fcgi", params=sparams); s.raise_for_status()
         sj = s.json().get("result", {})
-
     out = []
     for pmid in ids:
         itm = sj.get(pmid, {}) or {}
@@ -54,14 +41,31 @@ def search_pubmed(q: str, n: int = 5) -> List[Dict[str, Any]]:
             "journal": itm.get("fulljournalname"),
             "pubdate": itm.get("pubdate"),
             "authors": [a.get("name") for a in (itm.get("authors") or [])][:10],
-            "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+            "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
         })
     return out
 
-# === HTTP transport (MCP) を公開 ===
-mcp_app = mcp.streamable_http_app()
+# --- ASGI app for MCP (Streamable HTTP) ---
+# SDKのHTTPトランスポート（バージョンにより関数名が異なる可能性があるためフォールバック）
+get_mcp_http_app = getattr(mcp, "streamable_http_app", None) or getattr(mcp, "http_app", None)
+assert get_mcp_http_app, "Your MCP SDK version does not expose HTTP app factory."
+mcp_http_app = get_mcp_http_app()
 
-# Koyeb ヘルスチェック用
+# 明示ディスパッチ: /mcp と /mcp/... を強制的に mcp_http_app へ転送
+async def mcp_dispatch(scope, receive, send):
+    if scope["type"] != "http":
+        return await mcp_http_app(scope, receive, send)
+    path = scope.get("path", "")
+    if path == "/mcp" or path.startswith("/mcp/"):
+        # /mcp ベースを剥がして内部に渡す（/ → ルートに）
+        inner = dict(scope)
+        inner_path = path[len("/mcp"):] or "/"
+        inner["path"] = inner_path
+        return await mcp_http_app(inner, receive, send)
+    # それ以外は 404
+    return await PlainTextResponse("Not Found", 404)(scope, receive, send)
+
+# ヘルスとルート
 async def health(_):
     return PlainTextResponse("ok", 200)
 
@@ -72,9 +76,9 @@ app = Starlette()
 app.add_route("/", root)
 app.add_route("/healthz", health)
 
-# ここがポイント: WSGIMiddlewareで直接組み込み
-# /mcp と /mcp/ 両方で受ける
-app.mount("/mcp", mcp_app)
-app.mount("/mcp/", mcp_app)
-app.mount("/sse", mcp_app)
-app.mount("/sse/", mcp_app)
+# /mcp と /mcp/ の両方に対応（/sse も欲しければ同様のディスパッチを追加）
+# ここは Starlette の mount を避け、上の mcp_dispatch を直にASGIエンドポイントとして使う
+app.add_route("/mcp", lambda request: PlainTextResponse("Method Not Allowed", 405))
+app.add_route("/mcp/", lambda request: PlainTextResponse("Method Not Allowed", 405))
+# ASGIレベルで受けるために routes ではなく on_route_startup 的に add_route はダミー、実際は下行で配線
+app.router.default = mcp_dispatch  # これで未マッチ時に mcp_dispatch が呼ばれるようにする
