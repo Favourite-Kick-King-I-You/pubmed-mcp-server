@@ -80,14 +80,7 @@ app = Starlette()
 app.add_route("/", root)
 app.add_route("/healthz", health)
 
-from starlette.responses import PlainTextResponse
+# ここで MCP SDK の ASGI app を正しくマウント
+app.mount("/mcp", mcp_http_app)
 
-async def dummy_mcp(scope, receive, send):
-    response = PlainTextResponse("MCP dummy alive", 200)
-    await response(scope, receive, send)
-
-app = Starlette()
-app.add_route("/", root)
-app.add_route("/healthz", health)
-app.mount("/mcp", dummy_mcp)   # ← ここだけ残す
 
