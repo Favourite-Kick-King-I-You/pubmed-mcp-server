@@ -70,3 +70,4 @@ app = Starlette(
 
 # /mcp エンドポイントに MCP をマウント
 app.mount("/mcp", mcp_http_app)
+app.mount("/mcp/", mcp_http_app)
