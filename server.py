@@ -1,12 +1,9 @@
 import os
 from typing import Any
 import httpx
-
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
-
-# === MCP SDK ===
 from mcp.server.fastmcp import FastMCP
 
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
@@ -18,24 +15,17 @@ mcp = FastMCP("PubMed MCP")
 
 @mcp.tool()
 def search_pubmed(q: str, n: int = 5) -> list[dict[str, Any]]:
-    """PubMed を検索して論文情報を返す"""
     n = max(1, min(50, int(n)))
     params = {"db": "pubmed", "term": q, "retmode": "json", "retmax": n}
-    if NCBI_API_KEY:
-        params["api_key"] = NCBI_API_KEY
+    if NCBI_API_KEY: params["api_key"] = NCBI_API_KEY
     with httpx.Client(timeout=20, headers=UA) as client:
-        r = client.get(EUTILS + "esearch.fcgi", params=params)
-        r.raise_for_status()
+        r = client.get(EUTILS + "esearch.fcgi", params=params); r.raise_for_status()
         ids = r.json().get("esearchresult", {}).get("idlist", [])
-        if not ids:
-            return []
+        if not ids: return []
         sparams = {"db": "pubmed", "id": ",".join(ids), "retmode": "json"}
-        if NCBI_API_KEY:
-            sparams["api_key"] = NCBI_API_KEY
-        s = client.get(EUTILS + "esummary.fcgi", params=sparams)
-        s.raise_for_status()
+        if NCBI_API_KEY: sparams["api_key"] = NCBI_API_KEY
+        s = client.get(EUTILS + "esummary.fcgi", params=sparams); s.raise_for_status()
         sj = s.json().get("result", {})
-
     out = []
     for pmid in ids:
         itm = sj.get(pmid, {}) or {}
@@ -49,25 +39,17 @@ def search_pubmed(q: str, n: int = 5) -> list[dict[str, Any]]:
         })
     return out
 
-# ======================
-# ASGI アプリ設定
-# ======================
-# v1.8.1 では sse_app() が正しい
-mcp_http_app = mcp.sse_app()
+# ---- ASGI app (v1.8.1 は sse_app を使う) ----
+mcp_app = mcp.sse_app()
 
-async def root(_):
-    return JSONResponse({"service": "pubmed-mcp-server", "status": "ok"})
+async def root(_):    return JSONResponse({"service":"pubmed-mcp-server","status":"ok"})
+async def health(_):  return PlainTextResponse("ok", 200)
 
-async def health(_):
-    return PlainTextResponse("ok", 200)
+app = Starlette(routes=[
+    Route("/", root),
+    Route("/healthz", health),
+])
 
-app = Starlette(
-    routes=[
-        Route("/", root),
-        Route("/healthz", health),
-    ]
-)
-
-# /mcp エンドポイントに MCP をマウント
-app.mount("/mcp", mcp_http_app)
-app.mount("/mcp/", mcp_http_app)
+# ここがポイント：ルート("/")に MCP をマウントする
+# こうすると最終エンドポイントは「/sse」になる（＝UIの例と一致）
+app.mount("/", mcp_app)
