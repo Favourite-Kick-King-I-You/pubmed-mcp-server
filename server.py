@@ -65,7 +65,21 @@ async def mcp_dispatch(scope, receive, send):
     # それ以外は 404
     return await PlainTextResponse("Not Found", 404)(scope, receive, send)
 
+# ヘルスとルート
+async def health(_):
+    return PlainTextResponse("ok", 200)
 
+async def root(_):
+    return JSONResponse({"service": "pubmed-mcp-server", "status": "ok"})
+
+app = Starlette()
+app.add_route("/", root)
+app.add_route("/healthz", health)
+
+# ★ これでOK：StarletteのMountを素直に使う
+# /mcp と /sse の両方を明示的にマウント
+app.mount("/mcp", mcp_http_app)
+app.mount("/sse", mcp_http_app)
 
 from starlette.responses import PlainTextResponse
 
