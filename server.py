@@ -51,14 +51,9 @@ def search_pubmed(q: str, n: int = 5) -> list[dict[str, Any]]:
 
 # --- ASGI app for MCP (Streamable HTTP) ---
 # SDKのHTTPトランスポート（バージョンにより関数名が異なる可能性があるためフォールバック）
-get_mcp_http_app = (
-    getattr(mcp, "asgi_app", None)
-    or getattr(mcp, "http_app", None)
-    or getattr(mcp, "streamable_http_app", None)
-)
+mcp_http_app = mcp.asgi_app()
 
-assert get_mcp_http_app, "Your MCP SDK does not expose any ASGI app factory"
-mcp_http_app = get_mcp_http_app()
+
 
 # 明示ディスパッチ: /mcp と /mcp/... を強制的に mcp_http_app へ転送
 async def mcp_dispatch(scope, receive, send):
