@@ -1,3 +1,7 @@
+import sys
+print(">>> LOADING server.py", file=sys.stderr)
+
+
 import os
 from typing import List, Dict, Any
 import httpx
@@ -76,17 +80,14 @@ app = Starlette()
 app.add_route("/", root)
 app.add_route("/healthz", health)
 
-# ★ これでOK：StarletteのMountを素直に使う
-# /mcp と /sse の両方を明示的にマウント
-app.mount("/mcp", mcp_http_app)
-app.mount("/sse", mcp_http_app)
-
 from starlette.responses import PlainTextResponse
 
-# 追加テスト用
 async def dummy_mcp(scope, receive, send):
     response = PlainTextResponse("MCP dummy alive", 200)
     await response(scope, receive, send)
 
-# ↓ テスト用に一時的に差し替え
-app.mount("/mcp", dummy_mcp)
+app = Starlette()
+app.add_route("/", root)
+app.add_route("/healthz", health)
+app.mount("/mcp", dummy_mcp)   # ← ここだけ残す
+
