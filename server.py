@@ -76,9 +76,7 @@ app = Starlette()
 app.add_route("/", root)
 app.add_route("/healthz", health)
 
-# /mcp と /mcp/ の両方に対応（/sse も欲しければ同様のディスパッチを追加）
-# ここは Starlette の mount を避け、上の mcp_dispatch を直にASGIエンドポイントとして使う
-app.add_route("/mcp", lambda request: PlainTextResponse("Method Not Allowed", 405))
-app.add_route("/mcp/", lambda request: PlainTextResponse("Method Not Allowed", 405))
-# ASGIレベルで受けるために routes ではなく on_route_startup 的に add_route はダミー、実際は下行で配線
-app.router.default = mcp_dispatch  # これで未マッチ時に mcp_dispatch が呼ばれるようにする
+# ★ これでOK：StarletteのMountを素直に使う
+# /mcp と /sse の両方を明示的にマウント
+app.mount("/mcp", mcp_http_app)
+app.mount("/sse", mcp_http_app)
