@@ -72,8 +72,9 @@ app = Starlette()
 app.add_route("/", root)
 app.add_route("/healthz", health)
 
-# MCP アプリを両方にマウント
-app.mount("/mcp", mcp_app)   # /mcp 直
-app.mount("/mcp/", mcp_app)  # /mcp/ にも対応
+# ここがポイント: WSGIMiddlewareで直接組み込み
+# /mcp と /mcp/ 両方で受ける
+app.mount("/mcp", mcp_app)
+app.mount("/mcp/", mcp_app)
 app.mount("/sse", mcp_app)
 app.mount("/sse/", mcp_app)
