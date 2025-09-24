@@ -51,8 +51,13 @@ def search_pubmed(q: str, n: int = 5) -> list[dict[str, Any]]:
 
 # --- ASGI app for MCP (Streamable HTTP) ---
 # SDKのHTTPトランスポート（バージョンにより関数名が異なる可能性があるためフォールバック）
-get_mcp_http_app = getattr(mcp, "streamable_http_app", None) or getattr(mcp, "http_app", None)
-assert get_mcp_http_app, "Your MCP SDK version does not expose HTTP app factory."
+get_mcp_http_app = (
+    getattr(mcp, "asgi_app", None)
+    or getattr(mcp, "http_app", None)
+    or getattr(mcp, "streamable_http_app", None)
+)
+
+assert get_mcp_http_app, "Your MCP SDK does not expose any ASGI app factory"
 mcp_http_app = get_mcp_http_app()
 
 # 明示ディスパッチ: /mcp と /mcp/... を強制的に mcp_http_app へ転送
@@ -79,8 +84,5 @@ async def root(_):
 app = Starlette()
 app.add_route("/", root)
 app.add_route("/healthz", health)
-
-# ここで MCP SDK の ASGI app を正しくマウント
 app.mount("/mcp", mcp_http_app)
-
 
