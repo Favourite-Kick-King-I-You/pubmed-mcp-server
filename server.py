@@ -9,9 +9,6 @@ from starlette.routing import Route
 # === MCP SDK ===
 from mcp.server.fastmcp import FastMCP
 
-# ======================
-# PubMed MCP 定義
-# ======================
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 NCBI_API_KEY = os.getenv("NCBI_API_KEY")
 CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "your_email@example.com")
@@ -55,8 +52,8 @@ def search_pubmed(q: str, n: int = 5) -> list[dict[str, Any]]:
 # ======================
 # ASGI アプリ設定
 # ======================
-# v1.8.1 では asgi_app ではなく http_app を使う
-mcp_http_app = mcp.http_app()
+# v1.8.1 では sse_app() が正しい
+mcp_http_app = mcp.sse_app()
 
 async def root(_):
     return JSONResponse({"service": "pubmed-mcp-server", "status": "ok"})
